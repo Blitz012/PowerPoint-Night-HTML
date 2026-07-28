@@ -25,31 +25,42 @@
     width:100%; height:100%;
     margin:0; padding:0;
     overflow:hidden;
-    display:flex; align-items:center; justify-content:center;
     position:relative;
   }
 
   body{
-    background: radial-gradient(120% 120% at 50% 45%, var(--stage) 0 55%, var(--edge) 100%);
+    background: var(--edge);
     font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
     user-select: none;
     -webkit-user-select: none;
   }
 
+  /* ---------- fixed 1920x1080 design canvas ----------
+     Everything inside is laid out in plain px against this canvas.
+     JS scales the whole canvas uniformly to fit the real window,
+     so windowed, iframe, and fullscreen Presentation Mode all
+     render identically — no vw/vh re-scaling surprises. */
+  #scaler{
+    position:absolute; left:0; top:0;
+    width:1920px; height:1080px;
+    overflow:hidden;
+    transform-origin:top left;
+  }
+
   #stage{
     position:relative;
     width:100%; height:100%;
-    margin:0; padding:0; overflow:hidden;
-    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    background: radial-gradient(120% 120% at 50% 45%, var(--stage) 0 55%, var(--edge) 100%);
   }
 
   /* ---------- character portrait (center) ---------- */
   #portrait{
     position:absolute; left:50%; top:54%;
     transform:translate(-50%,-50%);
-    width:min(34vh, 40vw); height:min(46vh, 55vw);
+    width:340px; height:480px;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:1.2vmin;
+    gap:12px;
     border:3px dashed #55555e; border-radius:6px;
     background:linear-gradient(180deg,#3a3a41,#26262b);
     box-shadow:0 30px 40px -20px rgba(0,0,0,.8);
@@ -65,7 +76,7 @@
     opacity:.85;
   }
   #portrait .portrait-label{
-    color:#8b8b96; font-size:clamp(8px, 1.4vmin, 13px); letter-spacing:.18em; text-align:center;
+    color:#8b8b96; font-size:13px; letter-spacing:.18em; text-align:center;
     font-family:Arial, sans-serif; font-weight:700;
   }
 
@@ -73,7 +84,7 @@
   .statement{
     position:absolute; white-space:nowrap;
     font-style:italic; font-weight:900;
-    font-size:min(3.6vw, 5.2vmin);
+    font-size:48px;
     letter-spacing:.02em;
     color:var(--paper);
     /* hard multi-directional shadow = projector-legible outline */
@@ -94,8 +105,8 @@
   .s2{ top:74%; transform:rotate( 2deg); animation:driftR 15s linear -3s  infinite; }
   .s3{ top:40%; transform:rotate(-2deg); animation:driftL 10s linear -1.5s infinite; }
 
-  @keyframes driftL{ from{ left:105vw; } to{ left:-80vw; } }
-  @keyframes driftR{ from{ left:-80vw; } to{ left:105vw; } }
+  @keyframes driftL{ from{ left:105%; } to{ left:-80%; } }
+  @keyframes driftR{ from{ left:-80%; } to{ left:105%; } }
 
   /* ---------- the weak point ---------- */
   .weakpoint{
@@ -133,14 +144,14 @@
   }
 
   #flash{
-    position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:8;
+    position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:8;
   }
   .fired #flash{ animation:flashout .35s ease-out 1; }
   @keyframes flashout{ 0%{opacity:1} 100%{opacity:0} }
 
   /* ---------- "NO, THAT'S WRONG!" ---------- */
   #objection{
-    position:fixed; inset:0; z-index:9;
+    position:absolute; inset:0; z-index:9;
     display:none; align-items:center; justify-content:center;
     text-align:center;
   }
@@ -157,8 +168,8 @@
 
   #objection span{
     position:relative;
-    font-size:clamp(2.5rem, 7vw, 5.5rem);
-    max-width:90vw;
+    font-size:150px;
+    max-width:90%;
     line-height:.92;
     font-weight:900;
     transform:skewX(-6deg) rotate(-6deg);
@@ -176,25 +187,26 @@
   }
 
   #hint{
-    position:fixed; left:50%; bottom:4%; transform:translateX(-50%);
-    max-width:94vw; text-align:center; white-space:nowrap;
+    position:absolute; left:50%; bottom:4%; transform:translateX(-50%);
+    max-width:94%; text-align:center; white-space:nowrap;
     color:#8b8b96; font-family:Arial, sans-serif; font-weight:700;
-    font-size:clamp(9px, 1.7vmin, 15px); letter-spacing:.22em; text-transform:uppercase;
+    font-size:16px; letter-spacing:.22em; text-transform:uppercase;
     transition:opacity .3s; z-index:5;
   }
   .fired #hint{ opacity:0; }
 
   /* calm mode for anyone who needs it: statements park, no shake */
   @media (prefers-reduced-motion: reduce){
-    .s1{ left:8vw;  animation:none; }
-    .s2{ left:20vw; animation:none; }
-    .s3{ left:30vw; animation:none; }
+    .s1{ left:8%;  animation:none; }
+    .s2{ left:20%; animation:none; }
+    .s3{ left:30%; animation:none; }
     .fired #stage{ animation:none; }
     #objection::before{ animation:none; }
   }
 </style>
 </head>
 <body>
+  <div id="scaler">
   <div id="stage">
 
     <div id="portrait" aria-hidden="true">
@@ -216,6 +228,7 @@
 
     <div id="hint">Find the weak point &mdash; click the yellow text</div>
   </div>
+  </div>
 
 <script>
   /* ============================================================
@@ -228,6 +241,24 @@
 
   const body = document.body;
   const weak = document.querySelector('.weakpoint');
+
+  /* ---------- fit the 1920x1080 canvas to the window ----------
+     Uniform scale (aspect ratio preserved), centered with letterbox
+     bars when the window's aspect ratio differs from 16:9. Runs on
+     load and every resize, so entering/leaving PowerPoint's
+     fullscreen Presentation Mode re-fits automatically. */
+  const scaler = document.getElementById('scaler');
+  const BASE_W = 1920, BASE_H = 1080;
+
+  function fitToWindow(){
+    const scale = Math.min(window.innerWidth / BASE_W, window.innerHeight / BASE_H);
+    const offsetX = (window.innerWidth  - BASE_W * scale) / 2;
+    const offsetY = (window.innerHeight - BASE_H * scale) / 2;
+    scaler.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+  }
+
+  window.addEventListener('resize', fitToWindow);
+  fitToWindow();
 
   function fire(e){
     e.stopPropagation();
